@@ -1,4 +1,6 @@
 // app/layout.tsx
+import Navbar from '@/components/layout/navbar';
+import Footer from '@/components/layout/footer';
 
 import './globals.css';
 import type { Metadata } from 'next';
@@ -19,7 +21,9 @@ export default function RootLayout({
     return (
         <html lang="en">
         <body className={inter.className}>
+        <Navbar />
         {children}
+        <Footer />
         </body>
         </html>
     );
