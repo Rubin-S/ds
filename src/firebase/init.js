@@ -1,6 +1,6 @@
-// firebase/init.js
+
 import { initializeApp } from 'firebase/app';
-// Import the services you need
+
 import { getFirestore } from 'firebase/firestore';
 // If you need Authentication
 // import { getAuth } from 'firebase/auth';
