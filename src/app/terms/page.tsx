@@ -69,7 +69,7 @@ export default function TermsPage() {
                             <h3 className="font-semibold text-base text-foreground">5. Grievance Redressal</h3>
                             <p>
                                 Issues or concerns must be reported to the SMDS manager promptly. For urgent matters,
-                                please visit our <a href="/contact" className="underline text-primary">Contact Page</a>.
+                                please visit our <a href="/contact-us" className="underline text-primary">Contact Page</a>.
                             </p>
                         </section>
 
