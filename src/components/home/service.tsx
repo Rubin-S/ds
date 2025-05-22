@@ -27,7 +27,7 @@ export const ServiceCard: React.FC = () => {
                             Make the Most Out of the Driving Course
                         </h2>
                         <p className="mt-2 text-muted-foreground text-base md:text-lg">
-                            We're committed to providing everything you need for a stress-free licensing journey.
+                            We&#39;re committed to providing everything you need for a stress-free licensing journey.
                         </p>
                     </div>
 
