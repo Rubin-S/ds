@@ -1,30 +1,34 @@
 
-import { initializeApp } from 'firebase/app';
-
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 // If you need Authentication
 // import { getAuth } from 'firebase/auth';
 // If you need Storage
 // import { getStorage } from 'firebase/storage';
 
-
 const firebaseConfig = {
-    apiKey: "AIzaSyB1ZCiM02hPB0zR7MWoBLwOJ1ZdsC4JnJk",
-    authDomain: "smds-2025.firebaseapp.com",
-    projectId: "smds-2025", // Your project ID!
-    storageBucket: "smds-2025.firebasestorage.app",
-    messagingSenderId: "302371565652",
-    appId: "1:302371565652:web:6e82ef46967412e7587dc1",
-    measurementId: "G-0H9Q9DR389",
-};
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+  };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app;
+if (!getApps().length) {
+    app = initializeApp(firebaseConfig);
+} else {
+    app = getApp();
+}
 
-// Export the services you need
-export const db = getFirestore(app);
-// export const auth = getAuth(app);
-// export const storage = getStorage(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+// const analytics = getAnalytics(app); // If you need it
 
-// You might also export the app instance if needed elsewhere
-// export { app };
+export { app, auth, db, storage };
