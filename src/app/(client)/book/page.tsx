@@ -1,7 +1,7 @@
-// pages/contact-us.tsx
+// src/app/book/page.tsx (or your public form page)
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, ChangeEvent, FormEvent } from "react"; // useEffect removed if not used
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  RefreshCwIcon,
+} from "lucide-react"; // Added icons
 
 interface FormDataState {
   firstName: string;
@@ -28,7 +33,8 @@ interface FormDataState {
 
 const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
-const ContactPage = () => {
+const PublicContactPage = () => {
+  // Renamed component for clarity if this is different from admin
   const initialFormData: FormDataState = {
     firstName: "",
     lastName: "",
@@ -45,13 +51,12 @@ const ContactPage = () => {
   const [aadharPhoto, setAadharPhoto] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
-  // 'form', 'success', 'error'
   const [pageState, setPageState] = useState<"form" | "success" | "error">(
     "form"
   );
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { id, value } = e.target;
     setFormData((prev) => ({ ...prev, [id]: value }));
@@ -61,7 +66,7 @@ const ContactPage = () => {
     setFormData((prev) => ({ ...prev, bloodGroup: value }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setAadharPhoto(e.target.files[0]);
     } else {
@@ -80,7 +85,7 @@ const ContactPage = () => {
     setPageState("form");
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmissionError(null);
 
@@ -118,6 +123,7 @@ const ContactPage = () => {
 
     try {
       const response = await fetch("/api/contact-submissions", {
+        // Ensure this is the correct API endpoint
         method: "POST",
         body: submissionFormData,
       });
@@ -129,20 +135,24 @@ const ContactPage = () => {
         try {
           const errorJson = JSON.parse(responseText);
           errorMessage = errorJson.message || errorJson.detail || responseText;
-        } catch (jsonParseError) {
+        } catch (_jsonParseError) {
+          // jsonParseError variable not used, so prefix with _
           errorMessage = responseText.includes("<!DOCTYPE html>")
             ? "Submission endpoint not found or server error."
             : responseText;
         }
         throw new Error(errorMessage);
       }
-
-      // const result = JSON.parse(responseText); // We might not need the result for this UI change
       setPageState("success");
-    } catch (err: any) {
-      setSubmissionError(
-        err.message || "Failed to send submission. Please try again."
-      );
+    } catch (err: unknown) {
+      // Changed from any
+      if (err instanceof Error) {
+        setSubmissionError(
+          err.message || "Failed to send submission. Please try again."
+        );
+      } else {
+        setSubmissionError("An unknown error occurred. Please try again.");
+      }
       setPageState("error");
     } finally {
       setIsSubmitting(false);
@@ -157,18 +167,7 @@ const ContactPage = () => {
         transition={{ duration: 0.5 }}
         className="min-h-screen px-4 py-12 md:px-10 bg-white flex flex-col items-center justify-center text-center"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-16 w-16 text-green-500 mb-4"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <CheckCircle2Icon className="h-16 w-16 text-green-500 mb-4" />
         <h1 className="text-3xl md:text-4xl font-bold text-primary mb-4">
           Submission Successful!
         </h1>
@@ -191,18 +190,7 @@ const ContactPage = () => {
         transition={{ duration: 0.5 }}
         className="min-h-screen px-4 py-12 md:px-10 bg-white flex flex-col items-center justify-center text-center"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-16 w-16 text-red-500 mb-4"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 101.414-1.414L11.414 10l1.293-1.293a1 1 0 10-1.414-1.414L10 8.586 8.707 7.293z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <AlertTriangleIcon className="h-16 w-16 text-red-500 mb-4" />
         <h1 className="text-3xl md:text-4xl font-bold text-destructive mb-4">
           Submission Failed
         </h1>
@@ -221,7 +209,6 @@ const ContactPage = () => {
     );
   }
 
-  // pageState === 'form'
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
@@ -238,7 +225,6 @@ const ContactPage = () => {
         </p>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {/* Personal Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label
@@ -273,13 +259,12 @@ const ContactPage = () => {
               />
             </div>
           </div>
-
           <div>
             <label
               htmlFor="fatherName"
               className="block mb-1 font-medium text-muted-foreground"
             >
-              Father's Name *
+              Father&apos;s Name *
             </label>
             <Input
               id="fatherName"
@@ -290,7 +275,6 @@ const ContactPage = () => {
               required
             />
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label
@@ -326,7 +310,6 @@ const ContactPage = () => {
               />
             </div>
           </div>
-
           <div>
             <label
               htmlFor="bloodGroup"
@@ -351,8 +334,6 @@ const ContactPage = () => {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Optional Fields */}
           <div>
             <label
               htmlFor="email"
@@ -369,7 +350,6 @@ const ContactPage = () => {
               disabled={isSubmitting}
             />
           </div>
-
           <div>
             <label
               htmlFor="message"
@@ -386,8 +366,6 @@ const ContactPage = () => {
               disabled={isSubmitting}
             />
           </div>
-
-          {/* Aadhar Details - Mutually Exclusive */}
           <div className="p-4 border border-dashed rounded-md space-y-4">
             <p className="text-sm text-muted-foreground">
               Provide Aadhar details (Optional): You can upload a photo of your
@@ -413,11 +391,9 @@ const ContactPage = () => {
                 </p>
               )}
             </div>
-
             <div className="text-center my-2 text-sm font-medium text-muted-foreground">
               OR
             </div>
-
             <div>
               <label
                 htmlFor="aadharNumber"
@@ -434,21 +410,20 @@ const ContactPage = () => {
               />
             </div>
           </div>
-
-          {/* Display client-side validation error for required fields etc. before submitting */}
           {submissionError && pageState === "form" && (
             <p className="text-red-600 text-sm">{submissionError}</p>
           )}
-
           <Button
             type="submit"
             disabled={isSubmitting}
             className="w-full md:w-auto"
           >
+            {isSubmitting ? (
+              <RefreshCwIcon className="w-4 h-4 mr-2 animate-spin" />
+            ) : null}
             {isSubmitting ? "Submitting..." : "Submit Details"}
           </Button>
         </form>
-
         <div className="mt-12 md:mt-16 text-center text-muted-foreground text-xs md:text-sm">
           <p>For inquiries, you can also contact:</p>
           <p>Phone: +91 9443091530</p>
@@ -462,4 +437,4 @@ const ContactPage = () => {
   );
 };
 
-export default ContactPage;
+export default PublicContactPage; // Renamed for clarity

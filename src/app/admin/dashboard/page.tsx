@@ -2,10 +2,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, ChangeEvent } from "react";
-// import { useAuth } from '@/context/AuthContext'; // Example: Your auth context
 import { useRouter } from "next/navigation";
 
-// Shadcn UI imports
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,9 +32,15 @@ import {
   FileTextIcon,
   UploadCloudIcon,
   AlertTriangleIcon,
-  CheckCircle2Icon,
-  RefreshCwIcon, // For refresh button loading
+  // CheckCircle2Icon, // Removed as it was unused
+  RefreshCwIcon,
 } from "lucide-react";
+
+// More specific type for Firestore Timestamps when fetched to client
+type ClientTimestamp =
+  | { seconds: number; nanoseconds: number }
+  | null
+  | undefined;
 
 interface Submission {
   id: string;
@@ -50,10 +54,10 @@ interface Submission {
   message?: string;
   aadharPhotoUrl?: string | null;
   aadharNumber?: string | null;
-  submittedAt?: { seconds: number; nanoseconds: number } | any;
+  submittedAt?: ClientTimestamp;
   adminUploadedDocUrl?: string | null;
   adminNotes?: Record<string, string> | null;
-  lastAdminEditAt?: { seconds: number; nanoseconds: number } | any;
+  lastAdminEditAt?: ClientTimestamp;
 }
 
 const AdminDashboardPage = () => {
@@ -81,23 +85,20 @@ const AdminDashboardPage = () => {
     useState<Submission | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // --- Placeholder for Authentication ---
-  // const { user, isAdminRole, authLoading } = useAuth(); // Replace with your actual auth hook
-  const isAdminRole = true; // <<-- REPLACE THIS WITH YOUR ACTUAL ADMIN ROLE CHECK
-  const authLoading = false; // <<-- REPLACE THIS
+  const isAdminRole = true;
+  const authLoading = false;
 
   useEffect(() => {
     if (!authLoading && !isAdminRole) {
       setPageError("Access Denied. You must be an admin to view this page.");
-      setIsLoadingData(false); // Stop loading as access is denied
-      // router.replace('/login'); // Or your admin login page
+      setIsLoadingData(false);
+      // router.replace('/admin-login');
     }
   }, [isAdminRole, authLoading, router]);
 
   const fetchSubmissions = useCallback(
     async (showLoading = true) => {
       if (!isAdminRole) {
-        // Ensure only admins can fetch
         setIsLoadingData(false);
         return;
       }
@@ -115,8 +116,13 @@ const AdminDashboardPage = () => {
         }
         const data: Submission[] = await response.json();
         setSubmissions(data);
-      } catch (err: any) {
-        setPageError(err.message);
+      } catch (err: unknown) {
+        // Changed from any
+        if (err instanceof Error) {
+          setPageError(err.message);
+        } else {
+          setPageError("An unknown error occurred while fetching submissions.");
+        }
       } finally {
         if (showLoading) setIsLoadingData(false);
       }
@@ -126,7 +132,6 @@ const AdminDashboardPage = () => {
 
   useEffect(() => {
     if (isAdminRole) {
-      // Initial fetch if admin
       fetchSubmissions();
     }
   }, [fetchSubmissions, isAdminRole]);
@@ -137,15 +142,18 @@ const AdminDashboardPage = () => {
     setAdminDocFile(null);
     setNewNoteKey("");
     setNewNoteValue("");
-    setPageError(null); // Clear previous modal errors
+    setPageError(null);
     setIsEditModalOpen(true);
   };
 
   const handleFieldChange = (field: keyof Submission, value: string) => {
     if (editingSubmission) {
-      setEditingSubmission((prev) =>
-        prev ? { ...prev, [field]: value } : null
-      );
+      setEditingSubmission((prev) => {
+        if (!prev) return null;
+        // Create a new object for the state update
+        const updatedSubmission = { ...prev, [field]: value };
+        return updatedSubmission;
+      });
     }
   };
 
@@ -158,7 +166,7 @@ const AdminDashboardPage = () => {
       setNewNoteKey("");
       setNewNoteValue("");
     } else if (!newNoteKey.trim()) {
-      alert("Note label cannot be empty."); // Basic validation
+      alert("Note label cannot be empty.");
     }
   };
 
@@ -196,7 +204,6 @@ const AdminDashboardPage = () => {
           {
             method: "POST",
             body: fileFormData,
-            // Add authorization headers if your API needs them
           }
         );
 
@@ -210,50 +217,65 @@ const AdminDashboardPage = () => {
         newAdminDocUrl = uploadResult.fileUrl;
       }
 
-      const updateData: Partial<Submission> & {
-        adminNotes?: Record<string, string> | null;
-      } = {};
-      // Only include fields that have actually changed or are being explicitly set
-      // This avoids overwriting fields with undefined or empty strings if not intended
-      Object.keys(editingSubmission).forEach((keyStr) => {
-        const key = keyStr as keyof Submission;
-        if (
-          key !== "id" &&
-          key !== "submittedAt" &&
-          key !== "lastAdminEditAt" &&
-          editingSubmission[key] !==
-            submissions.find((s) => s.id === editingSubmission.id)?.[key]
-        ) {
-          if (key === "adminNotes" || key === "adminUploadedDocUrl") return; // Handled separately
-          (updateData as any)[key] = editingSubmission[key];
+      const updatePayload: Partial<Submission> = {};
+      // Construct payload with only changed fields to avoid overwriting with defaults
+      (Object.keys(editingSubmission) as Array<keyof Submission>).forEach(
+        (key) => {
+          if (
+            key !== "id" &&
+            key !== "submittedAt" &&
+            key !== "lastAdminEditAt" &&
+            key !== "adminNotes" &&
+            key !== "adminUploadedDocUrl"
+          ) {
+            // Check if the value has actually changed from the original submission
+            const originalSubmission = submissions.find(
+              (s) => s.id === editingSubmission.id
+            );
+            if (
+              originalSubmission &&
+              editingSubmission[key] !== originalSubmission[key]
+            ) {
+              (updatePayload as any)[key] = editingSubmission[key];
+            } else if (
+              !originalSubmission &&
+              editingSubmission[key] !== undefined
+            ) {
+              // New field or not in original list
+              (updatePayload as any)[key] = editingSubmission[key];
+            }
+          }
         }
-      });
-      updateData.adminNotes = currentAdminNotes;
-      updateData.adminUploadedDocUrl = newAdminDocUrl;
+      );
 
-      if (
-        Object.keys(updateData).length === 0 &&
-        !adminDocFile &&
-        JSON.stringify(currentAdminNotes) ===
-          JSON.stringify(
-            submissions.find((s) => s.id === editingSubmission.id)
-              ?.adminNotes || {}
-          )
-      ) {
-        alert("No changes detected to save.");
-        setIsSaving(false);
-        setIsEditModalOpen(false);
-        return;
+      updatePayload.adminNotes = currentAdminNotes;
+      updatePayload.adminUploadedDocUrl = newAdminDocUrl;
+
+      if (Object.keys(updatePayload).length === 0) {
+        // Check if only notes or doc URL changed
+        const originalSubmission = submissions.find(
+          (s) => s.id === editingSubmission.id
+        );
+        const notesChanged =
+          JSON.stringify(currentAdminNotes) !==
+          JSON.stringify(originalSubmission?.adminNotes || {});
+        const docChanged =
+          newAdminDocUrl !== (originalSubmission?.adminUploadedDocUrl || null);
+
+        if (!notesChanged && !docChanged) {
+          alert("No changes detected to save.");
+          setIsSaving(false);
+          setIsEditModalOpen(false);
+          return;
+        }
       }
 
       const updateResponse = await fetch(
         `/api/admin/submissions/${editingSubmission.id}`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json" /* Add auth headers */,
-          },
-          body: JSON.stringify(updateData),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatePayload),
         }
       );
 
@@ -266,10 +288,14 @@ const AdminDashboardPage = () => {
 
       alert("Submission updated successfully!");
       setIsEditModalOpen(false);
-      fetchSubmissions(false); // Refresh without full page loading indicator
-    } catch (err: any) {
-      setPageError(`Save failed: ${err.message}`); // Display error
-      // alert(`Save failed: ${err.message}`); // Or use a toast
+      fetchSubmissions(false);
+    } catch (err: unknown) {
+      // Changed from any
+      if (err instanceof Error) {
+        setPageError(`Save failed: ${err.message}`);
+      } else {
+        setPageError("An unknown error occurred during save.");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -290,7 +316,6 @@ const AdminDashboardPage = () => {
         `/api/admin/submissions/${submissionToDelete.id}`,
         {
           method: "DELETE",
-          // Add authorization headers if your API needs them
         }
       );
       if (!response.ok) {
@@ -302,26 +327,38 @@ const AdminDashboardPage = () => {
       alert("Submission deleted successfully!");
       setShowDeleteConfirm(false);
       setSubmissionToDelete(null);
-      fetchSubmissions(false); // Refresh without full page loading indicator
-    } catch (err: any) {
-      setPageError(`Delete failed: ${err.message}`);
-      // alert(`Delete failed: ${err.message}`);
+      fetchSubmissions(false);
+    } catch (err: unknown) {
+      // Changed from any
+      if (err instanceof Error) {
+        setPageError(`Delete failed: ${err.message}`);
+      } else {
+        setPageError("An unknown error occurred during delete.");
+      }
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const formatTimestamp = (timestamp: any): string => {
+  const formatTimestamp = (timestamp: ClientTimestamp): string => {
     if (!timestamp) return "N/A";
     try {
-      if (timestamp.toDate) return timestamp.toDate().toLocaleString();
-      if (timestamp.seconds)
-        return new Date(timestamp.seconds * 1000).toLocaleString();
-      const date = new Date(timestamp);
+      // Check if it's a Firestore-like timestamp object from server
+      if (
+        typeof timestamp === "object" &&
+        "seconds" in timestamp &&
+        "nanoseconds" in timestamp
+      ) {
+        return new Date(
+          timestamp.seconds * 1000 + timestamp.nanoseconds / 1000000
+        ).toLocaleString();
+      }
+      // Fallback for Date objects or parseable date strings
+      const date = new Date(timestamp as string | number | Date); // Cast for Date constructor
       if (isNaN(date.getTime())) return "Invalid Date";
       return date.toLocaleString();
     } catch {
-      return "Invalid Date";
+      return "Invalid Date Object";
     }
   };
 
@@ -374,7 +411,7 @@ const AdminDashboardPage = () => {
   }
 
   return (
-    <div className="container mx-auto mt-5 pt-5 p-4 md:p-6">
+    <div className="container mx-auto p-4 md:p-6">
       <header className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <h1 className="text-2xl md:text-3xl font-bold">
           Admin Dashboard - Submissions
@@ -389,7 +426,7 @@ const AdminDashboardPage = () => {
         </Button>
       </header>
 
-      {pageError && (
+      {pageError && ( // Display error as a banner if data is already present or modal error
         <div className="mb-4 p-3 bg-destructive/10 border border-destructive text-destructive rounded-md flex items-center gap-2">
           <AlertTriangleIcon className="w-5 h-5 flex-shrink-0" />
           <p>
@@ -405,7 +442,7 @@ const AdminDashboardPage = () => {
               ? "No submissions found."
               : submissions.length > 0
               ? "A list of user submissions."
-              : ""}
+              : "Loading submissions..."}
           </TableCaption>
           <TableHeader>
             <TableRow>
@@ -481,12 +518,14 @@ const AdminDashboardPage = () => {
         </Table>
       </div>
 
-      {/* Edit Modal */}
       {isEditModalOpen && editingSubmission && (
         <Dialog
           open={isEditModalOpen}
           onOpenChange={(isOpen) => {
-            if (!isSaving) setIsEditModalOpen(isOpen);
+            if (!isSaving) {
+              setIsEditModalOpen(isOpen);
+              if (!isOpen) setPageError(null);
+            }
           }}
         >
           <DialogContent className="sm:max-w-2xl md:max-w-3xl">
@@ -502,8 +541,6 @@ const AdminDashboardPage = () => {
               )}
             </DialogHeader>
             <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto p-1 pr-3">
-              {" "}
-              {/* Added pr-3 for scrollbar space */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label
@@ -539,7 +576,7 @@ const AdminDashboardPage = () => {
                     htmlFor="editFatherName"
                     className="text-sm font-medium"
                   >
-                    Father's Name
+                    Father&apos;s Name
                   </label>
                   <Input
                     id="editFatherName"
@@ -639,6 +676,7 @@ const AdminDashboardPage = () => {
                   rows={3}
                 />
               </div>
+
               <div className="mt-4 border-t pt-4">
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                   <UploadCloudIcon className="w-5 h-5" /> Admin Document
@@ -677,6 +715,7 @@ const AdminDashboardPage = () => {
                   </p>
                 )}
               </div>
+
               <div className="mt-4 border-t pt-4">
                 <h3 className="text-lg font-semibold mb-3">Additional Notes</h3>
                 {Object.entries(currentAdminNotes).length > 0 ? (
@@ -696,7 +735,7 @@ const AdminDashboardPage = () => {
                           }))
                         }
                         className="flex-[2]"
-                        rows={1} // Keep it small, it can expand
+                        rows={1}
                       />
                       <Button
                         variant="ghost"
@@ -752,7 +791,11 @@ const AdminDashboardPage = () => {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" disabled={isSaving}>
+                <Button
+                  variant="outline"
+                  disabled={isSaving}
+                  onClick={() => setPageError(null)}
+                >
                   Cancel
                 </Button>
               </DialogClose>
@@ -771,7 +814,10 @@ const AdminDashboardPage = () => {
         <Dialog
           open={showDeleteConfirm}
           onOpenChange={(isOpen) => {
-            if (!isDeleting) setShowDeleteConfirm(isOpen);
+            if (!isDeleting) {
+              setShowDeleteConfirm(isOpen);
+              if (!isOpen) setPageError(null);
+            }
           }}
         >
           <DialogContent>
@@ -788,7 +834,7 @@ const AdminDashboardPage = () => {
                 storage.
               </DialogDescription>
             </DialogHeader>
-            {pageError && ( // Show modal specific errors here
+            {pageError && (
               <p className="text-sm text-destructive bg-destructive/10 p-2 rounded-md mt-2">
                 {pageError}
               </p>
@@ -796,7 +842,10 @@ const AdminDashboardPage = () => {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setPageError(null);
+                }}
                 disabled={isDeleting}
               >
                 Cancel

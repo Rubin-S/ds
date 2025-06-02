@@ -1,8 +1,8 @@
 // src/app/api/admin/submissions/[submissionId]/upload-admin-doc/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/firebase/firebaseAdmin"; // Ensure this path is correct
+import admin from "@/firebase/firebaseAdmin";
 import { v4 as uuidv4 } from "uuid";
-// import { verifyAdminAuth } from '@/lib/server/adminAuthUtils'; // Your server-side auth verification
+// import { verifyAdminAuth } from '@/lib/server/adminAuthUtils';
 
 export async function POST(
   req: NextRequest,
@@ -23,7 +23,7 @@ export async function POST(
 
   try {
     const formData = await req.formData();
-    const file = formData.get("adminDocument") as File | null; // Key used in frontend FormData
+    const file = formData.get("adminDocument") as File | null;
 
     if (!file) {
       return NextResponse.json(
@@ -37,13 +37,8 @@ export async function POST(
         { status: 400 }
       );
     }
-    // Add PDF type check if strictly needed:
-    // if (file.type !== 'application/pdf') {
-    //   return NextResponse.json({ message: 'Only PDF files are allowed for admin documents.' }, { status: 400 });
-    // }
 
     const bucket = admin.storage().bucket();
-    // Store in a structured path, e.g., admin_documents/submission_id/unique_file_name.pdf
     const uniqueFilename = `admin_documents/${submissionId}/${uuidv4()}-${
       file.name
     }`;
@@ -55,30 +50,24 @@ export async function POST(
       metadata: { contentType: file.type },
     });
 
-    await storageFile.makePublic(); // Or use getSignedUrl for more secure access
+    await storageFile.makePublic();
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storageFile.name}`;
-
-    // Optionally: Update the Firestore document with this URL directly here,
-    // OR return the URL for the client to include in a subsequent PUT request.
-    // For simplicity, we'll return the URL.
-    // If updating directly:
-    // const db = admin.firestore();
-    // await db.collection('contactSubmissions').doc(submissionId).update({
-    //   adminUploadedDocUrl: publicUrl,
-    //   lastAdminEditAt: admin.firestore.FieldValue.serverTimestamp()
-    // });
 
     return NextResponse.json({
       message: "Document uploaded successfully",
       fileUrl: publicUrl,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Changed from any
+    const errorMessage =
+      error instanceof Error ? error.message : "An unknown error occurred";
     console.error(
       `[API POST /api/admin/submissions/${submissionId}/upload-admin-doc] Error:`,
+      errorMessage,
       error
     );
     return NextResponse.json(
-      { message: "Failed to upload document.", detail: error.message },
+      { message: "Failed to upload document.", detail: errorMessage },
       { status: 500 }
     );
   }
