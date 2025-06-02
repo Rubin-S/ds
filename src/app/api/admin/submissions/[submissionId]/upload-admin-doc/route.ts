@@ -4,11 +4,18 @@ import admin from "@/firebase/firebaseAdmin";
 import { v4 as uuidv4 } from "uuid";
 // import { verifyAdminAuth } from '@/lib/server/adminAuthUtils';
 
+type RouteContext = {
+  params: Promise<{
+    submissionId: string;
+  }>;
+};
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: { submissionId: string } }
+  context: RouteContext
 ) {
-  const { submissionId } = params;
+  const { submissionId } = await context.params;
+  // --- Authentication & Authorization ---
 
   // --- Authentication & Authorization ---
   // const { isAdmin, error, status } = await verifyAdminAuth(req);

@@ -1,24 +1,22 @@
 // src/app/api/admin/submissions/[submissionId]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/firebase/firebaseAdmin"; // Ensure this path alias resolves correctly to your firebaseAdmin.js/ts
-import { Bucket } from "@google-cloud/storage"; // For explicit Bucket type
+import admin from "@/firebase/firebaseAdmin";
+import { Bucket } from "@google-cloud/storage";
 
-// Ensure Firebase Admin is initialized and services are correctly accessed
+// Firebase services setup
 let db: FirebaseFirestore.Firestore;
-let storage: ReturnType<typeof admin.storage>; // Type for the storage service
-let bucket: Bucket; // Type for the bucket object
+let storage: ReturnType<typeof admin.storage>;
+let bucket: Bucket;
 
 try {
   db = admin.firestore();
-  storage = admin.storage(); // Get the storage service
-  bucket = storage.bucket(); // Get the default bucket from the service
+  storage = admin.storage();
+  bucket = storage.bucket();
   if (
     typeof db.collection !== "function" ||
     typeof bucket.file !== "function"
   ) {
-    throw new Error(
-      "Firebase services not initialized correctly. Check firebaseAdmin.js setup and permissions."
-    );
+    throw new Error("Firebase services not initialized correctly.");
   }
 } catch (e: unknown) {
   const errorMessage =
@@ -28,11 +26,9 @@ try {
     errorMessage,
     e
   );
-  // If initialization fails, subsequent calls will error.
-  // Consider how to handle this globally if admin init fails.
 }
 
-// Define UpdateData locally to ensure it's not mistaken for a generic
+// Define local type for updates
 interface LocalUpdateData {
   firstName?: string;
   lastName?: string;
@@ -47,17 +43,19 @@ interface LocalUpdateData {
   adminUploadedDocUrl?: string | null;
 }
 
-// GET a single submission by ID
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { submissionId: string } }
-) {
-  const { submissionId } = params;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _unusedReq = req; // If req is truly unused for GET by ID
+// Shared context type to avoid destructuring in the params
+type RouteContext = {
+  params: Promise<{
+    submissionId: string;
+  }>;
+};
+
+// GET a single submission
+export async function GET(req: NextRequest, context: RouteContext) {
+  const { submissionId } = await context.params;
+  void req; // Avoid unused var lint warning
 
   if (!db) {
-    // Check if db was initialized
     return NextResponse.json(
       { message: "Internal Server Error: Database service not available." },
       { status: 500 }
@@ -86,11 +84,7 @@ export async function GET(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred";
-    console.error(
-      `[API GET /api/admin/submissions/${submissionId}] Error:`,
-      errorMessage,
-      error
-    );
+    console.error(`[API GET /${submissionId}] Error:`, errorMessage, error);
     return NextResponse.json(
       { message: "Failed to fetch submission.", detail: errorMessage },
       { status: 500 }
@@ -98,12 +92,9 @@ export async function GET(
   }
 }
 
-// PUT (Update) a submission
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { submissionId: string } }
-) {
-  const { submissionId } = params;
+// PUT (update) a submission
+export async function PUT(req: NextRequest, context: RouteContext) {
+  const { submissionId } = await context.params;
 
   if (!db) {
     return NextResponse.json(
@@ -120,7 +111,7 @@ export async function PUT(
   }
 
   try {
-    const body = (await req.json()) as LocalUpdateData; // Use the locally defined interface
+    const body = (await req.json()) as LocalUpdateData;
     const docRef = db.collection("contactSubmissions").doc(submissionId);
 
     const dataToUpdate: FirebaseFirestore.UpdateData<Record<string, any>> = {};
@@ -161,11 +152,7 @@ export async function PUT(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred";
-    console.error(
-      `[API PUT /api/admin/submissions/${submissionId}] Error:`,
-      errorMessage,
-      error
-    );
+    console.error(`[API PUT /${submissionId}] Error:`, errorMessage, error);
     return NextResponse.json(
       { message: "Failed to update submission.", detail: errorMessage },
       { status: 500 }
@@ -174,16 +161,11 @@ export async function PUT(
 }
 
 // DELETE a submission
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { submissionId: string } }
-) {
-  const { submissionId } = params;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _unusedReq = req;
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  const { submissionId } = await context.params;
+  void req;
 
   if (!db || !bucket) {
-    // Check for bucket initialization too
     return NextResponse.json(
       { message: "Internal Server Error: Firebase services not available." },
       { status: 500 }
@@ -207,9 +189,9 @@ export async function DELETE(
         { status: 404 }
       );
     }
-    const submissionData = docSnap.data();
 
-    const filesToDelete: (string | undefined | null)[] = [
+    const submissionData = docSnap.data();
+    const filesToDelete = [
       submissionData?.aadharPhotoUrl,
       submissionData?.adminUploadedDocUrl,
     ];
@@ -217,20 +199,20 @@ export async function DELETE(
     for (const fileUrl of filesToDelete) {
       if (fileUrl && typeof fileUrl === "string") {
         try {
-          const urlParts = fileUrl.split(`/${bucket.name}/`); // Use initialized bucket
+          const urlParts = fileUrl.split(`/${bucket.name}/`);
           if (urlParts.length > 1) {
             const filePath = decodeURIComponent(urlParts[1].split("?")[0]);
             if (filePath) {
-              await bucket.file(filePath).delete({ ignoreNotFound: true }); // Use initialized bucket
+              await bucket.file(filePath).delete({ ignoreNotFound: true });
             }
           }
         } catch (storageError: unknown) {
           const storageErrorMessage =
             storageError instanceof Error
               ? storageError.message
-              : "An unknown storage error";
+              : "Unknown storage error";
           console.error(
-            `[API DELETE] Error deleting file ${fileUrl} from Storage:`,
+            `[API DELETE] Error deleting file ${fileUrl}:`,
             storageErrorMessage,
             storageError
           );
@@ -246,11 +228,7 @@ export async function DELETE(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred";
-    console.error(
-      `[API DELETE /api/admin/submissions/${submissionId}] Error:`,
-      errorMessage,
-      error
-    );
+    console.error(`[API DELETE /${submissionId}] Error:`, errorMessage, error);
     return NextResponse.json(
       { message: "Failed to delete submission.", detail: errorMessage },
       { status: 500 }

@@ -236,13 +236,13 @@ const AdminDashboardPage = () => {
               originalSubmission &&
               editingSubmission[key] !== originalSubmission[key]
             ) {
-              (updatePayload as any)[key] = editingSubmission[key];
+              (updatePayload as Partial<Submission>)[key] = editingSubmission[key] ?? undefined;
             } else if (
               !originalSubmission &&
               editingSubmission[key] !== undefined
             ) {
               // New field or not in original list
-              (updatePayload as any)[key] = editingSubmission[key];
+              (updatePayload as Partial<Submission>)[key] = editingSubmission[key] ?? undefined;
             }
           }
         }
